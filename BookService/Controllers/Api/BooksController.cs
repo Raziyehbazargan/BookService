@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Web.Http;
 using System.Web.Http.Description;
 using BookService.Models;
+using BookService.Models.Dtos;
 
 namespace BookService.Controllers.Api
 {
@@ -18,16 +19,32 @@ namespace BookService.Controllers.Api
         private BookServiceContext db = new BookServiceContext();
 
         // GET: api/Books
-        public IQueryable<Book> GetBooks()
+        public IQueryable<BookDTO> GetBooks()
         {
-            return db.Books;
+            var books = db.Books.Select(b => new BookDTO()
+                {
+                    Id = b.Id,
+                    Title = b.Title,
+                    AuthorName = b.Author.Name
+                });
+
+            return books;
         }
 
         // GET: api/Books/5
-        [ResponseType(typeof(Book))]
+        [ResponseType(typeof(BookDetailDTO))]
         public async Task<IHttpActionResult> GetBook(int id)
         {
-            Book book = await db.Books.FindAsync(id);
+            var book = await db.Books.Include(b => b.Author).Select(b => new BookDetailDTO()
+            {
+                Id = b.Id,
+                Title = b.Title,
+                Year = b.Year,
+                Price = b.Price,
+                AuthorName = b.Author.Name,
+                Genre = b.Genre
+            }).SingleOrDefaultAsync(b => b.Id == id);
+
             if (book == null)
             {
                 return NotFound();
@@ -72,7 +89,7 @@ namespace BookService.Controllers.Api
         }
 
         // POST: api/Books
-        [ResponseType(typeof(Book))]
+        [ResponseType(typeof(BookDTO))]
         public async Task<IHttpActionResult> PostBook(Book book)
         {
             if (!ModelState.IsValid)
@@ -83,7 +100,15 @@ namespace BookService.Controllers.Api
             db.Books.Add(book);
             await db.SaveChangesAsync();
 
-            return CreatedAtRoute("DefaultApi", new { id = book.Id }, book);
+            db.Entry(book).Reference(x => x.Author).Load();
+            var dto = new BookDTO()
+            {
+                Id = book.Id,
+                Title = book.Title,
+                AuthorName = book.Author.Name
+            };
+
+            return CreatedAtRoute("DefaultApi", new { id = book.Id }, dto);
         }
 
         // DELETE: api/Books/5
